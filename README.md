@@ -1,121 +1,50 @@
-# korean_pump
-Validation of a trading strategy based on the Upbit pump-and-short thesis.
+# Validation of an Upbit-pump short strategy
 
+A rigorous IS/OOS + walk-forward backtest of the thesis that **Korea-driven altcoin pumps on Upbit mean-revert**, and can be shorted profitably after the move.
 
+## Theorem
 
-# Теорема об Upbit-пампах и её проверка
+A sharp, Korea-driven upward move in an altcoin on Upbit is, on average, **partially reverted** over the following hours — enough that a short opened *after* the move and held to a fixed horizon has **positive net expectancy after costs**.
 
-Документ фиксирует **идею** в виде falsifiable-утверждения и описывает, **как её можно опровергнуть**. Это не описание реализации и не план бэктеста — это то, что бэктест потом должен будет либо подтвердить, либо убить.
+Mechanism: Korea's capital controls impede cross-border arbitrage, so a local retail surge lets the Upbit price overshoot the global price. Local overshoots tend to collapse back. The trade bets on that collapse.
 
----
+Consequence: the edge is a **high win rate with negative skew** — many small wins (reversion) against rare large losses (pump continues). Positive expectancy is necessary but not sufficient; the thesis must also survive the left tail.
 
-## Часть I. Теорема
+## Hypotheses
 
-### Формулировка (главное утверждение)
+- **H1 — Reversion exists.** Forward return of the token from a post-pump entry to the exit horizon is negative on average (kimchi-agnostic).
+- **H2 — Tradeable after costs.** A short capturing that reversion has positive net expectancy after fees, funding, slippage, and stop-through.
+- **H3 — Korea-specific.** The edge strengthens when the Korean (kimchi) premium is elevated and/or starts deflating, and is weaker without it. This separates the thesis from "short any pump."
+- **H4 — Not an artifact.** The edge survives OOS and null/permutation tests, isn't explained by survivorship or look-ahead, and isn't concentrated in a few outlier trades.
 
-> Резкий рост альткоина, вызванный корейским спросом и наблюдаемый на Upbit, в среднем частично откатывает в течение последующих часов. Откат достаточно велик, чтобы шорт, открытый **после** рывка и удерживаемый до фиксированного горизонта, имел положительное матожидание чистой доходности после реалистичных издержек.
+The theorem holds only if **H1–H4 hold jointly**. H3 is what makes it specifically a *Korean* phenomenon rather than generic mean reversion.
 
-Ключевые слова, каждое из которых проверяемо:
-- **«корейским спросом»** — рост сопровождается аномальной активностью именно на Upbit (объём + корейская премия), а не глобальным движением.
-- **«в среднем частично откатывает»** — форвардная доходность токена после рывка отрицательна в среднем.
-- **«положительное матожидание после издержек»** — эджа хватает, чтобы пережить комиссии, funding и проскальзывание (включая проскок стопа).
+## Signals
 
-### Механизм (почему это вообще должно работать)
+An **event** (Korean pump) is a token-day flagged by abnormal upward activity on Upbit:
 
-В Южной Корее жёсткий контроль движения капитала. Классический арбитраж (купить дешевле снаружи, продать дороже в Корее) затруднён, поэтому при всплеске корейской розницы цена на Upbit может **оторваться вверх** от глобальной и какое-то время держать перегрев. Если перегрев локальный и спекулятивный, он с высокой вероятностью схлопывается обратно к глобальному уровню. Шорт ставит на это схлопывание.
+- **Volume spike** — the event-hour traded value exceeds the cumulative value of the preceding *N* hours.
+- **Breakout** — the event-hour high exceeds prior *N*-hour highs by a margin.
+- **Pump magnitude** — intra-hour move (open → high) above a base percentage.
+- **Close confirmation** — the candle closes up by a threshold, not just an intrabar wick.
+- **Entry gate** — the move is still above threshold at entry time (the run-up persisted).
 
-Из механизма сразу следует характер сделки: **высокий винрейт при отрицательной асимметрии** — много мелких выигрышей (откат) против редких крупных проигрышей (памп продолжился). Поэтому положительное матожидание — необходимое, но **недостаточное** условие: теорема обязана пережить ещё и левый хвост.
+**Kimchi premium** (measured per trade, used to test H3): `KRW_price / (USD_price × KRW/USDT) − 1`, sampled as a pre-event baseline, at entry, at exit, and as a 5-minute timeline.
 
-### Декомпозиция на проверяемые под-утверждения
+Trade: short after the move, protective stop and take-profit (take captures a fraction of the run-up), otherwise time-exit at the next session.
 
-| | Утверждение | Что его опровергает |
-|---|---|---|
-| **H1** | После корейского пампа форвардная доходность токена от пост-пампового входа до горизонта выхода **отрицательна в среднем** (голый эффект реверсии, без учёта кимчи). | Средняя форвардная доходность ≥ 0 или статистически неотличима от нуля. |
-| **H2** | Шорт, забирающий эту реверсию, имеет **положительное чистое матожидание после издержек** (комиссии + funding + слиппедж + проскок стопа). | Чистое матожидание ≤ 0 при реалистичных издержках. |
-| **H3** | Эдж **специфичен для корейского спроса**: он усиливается при повышенной корейской премии и/или когда премия начинает сдуваться, и слабее/отсутствует для пампов без премии. | Кондиционирование по премии не улучшает эдж → тезис «это именно корейское явление» не подтверждён (H1/H2 при этом могут жить как обычная реверсия). |
-| **H4** | Эдж **реален, а не артефакт**: не объясняется survivorship-вселенной, знаком издержек, лукэхедом, и не держится на горстке сделок; переживает null-тесты и OOS. | Эдж исчезает на OOS, на null/permutation-тестах, или сконцентрирован в нескольких outlier-сделках. |
+## Validation methodology
 
-Теорема считается **подтверждённой**, только если выполнены H1–H4 одновременно. H3 при этом — самостоятельная ценность: именно она отличает гипотезу от тривиального «шорти любой памп».
+- **IS/OOS split** — chronological; the last ~30–40% is held out and untouched until a single final run.
+- **Pre-registered parameter grid** — small and fixed in advance (event thresholds, trade geometry, kimchi overlay on/off). The kimchi overlay vs. the no-overlay baseline *is* the test of H3.
+- **Walk-forward** — rolling train→test windows; the edge must hold in the majority of windows, not one stretch.
+- **Cost & execution stress** — sweeps over fees, slippage, and **stop-through** (worse-than-nominal stop fills on illiquid continued pumps), plus funding scenarios.
+- **Null tests** — randomized entry direction/timing must make the edge vanish; event→date permutation.
+- **Tail & concentration** — bootstrap confidence intervals (returns are skewed, non-normal), worst-N trades, and share of PnL from the top trades.
+- **Honest accounting** — symmetric fees, funding, and mark-to-market drawdown with a concurrent-position cap.
 
-### Определения (параметризованы, без зашитых чисел)
+**Pass (on OOS, jointly):** H1 reversion significant (CI excludes zero) · H2 positive net expectancy after costs · H3 kimchi overlay beats baseline · H4 edge in most walk-forward windows, survives stop-through, fails null tests, not outlier-driven · drawdown within risk budget.
 
-- **Событие (корейский памп)** — токен-день, где утренний рост на Upbit превышает порог по магнитуде **и** сопровождается аномальным объёмом. Пороги магнитуды и аномальности — свободные параметры θ_event.
-- **Корейская премия** — относительное превышение цены токена на Upbit (в KRW) над глобальной (Binance USDT, пересчитанной через курс KRW/USDT с того же рынка). Уровень и динамика премии — наблюдаемые признаки, не входящие в определение события в базовой версии.
-- **Вход** — после фиксированной задержки от события (рывок должен сохраниться к моменту входа).
-- **Горизонт выхода** — фиксированный по времени, плюс защитные стоп и тейк.
+## Status
 
-Конкретные значения порогов и горизонтов — предмет валидации (Часть II), а **не** аксиомы. Идея от них не зависит; от них зависит лишь сила эффекта.
-
----
-
-## Часть II. Как проверить теорему
-
-### Логика проверки
-
-1. **Сформировать множество событий** по θ_event на истории.
-2. **Измерить форвардную доходность** короткой позиции от входа до горизонта — отдельно «грязную» (H1) и «чистую» после издержек (H2).
-3. **Кондиционировать по корейской премии** и сравнить с базой без кондиционирования (H3).
-4. **Прогнать на неприкосновенных данных и на нулевых гипотезах** (H4).
-
-Нулевая гипотеза по умолчанию: форвардная доходность шорта = 0 (после издержек). Теорема пытается её отвергнуть.
-
-### Статистический фрейм
-
-- Доходности несимметричны и с тяжёлым хвостом → значимость считаем **бутстрэпом / перестановочными тестами**, не t-тестом по нормальности.
-- Отчётный эффект: матожидание чистой доходности на сделку и expectancy, **с доверительными интервалами** (бутстрэп). Плюс распределение исходов и хвостовые статистики, а не только среднее.
-- Минимальный размер выборки фиксируется заранее: при тонкой выборке H3 (кондиционирование) в принципе не доказуема — это записывается как «не проверено», а не «опровергнуто».
-
-### Параметры валидации
-
-**1. Разбиение выборки**
-- Хронологический сплит. **OOS — последние ~30–40% периода, неприкосновенны** до единственного финального прогона.
-- На IS — любой перебор в пределах объявленной сетки; на OOS — одна финальная конфигурация.
-
-**2. Сетка свободных параметров (объявляется заранее и держится маленькой)**
-- θ_event: пороги магнитуды и аномального объёма — базовый набор + один мягче, один жёстче.
-- Геометрия сделки: задержка входа, горизонт выхода, стоп, тейк — по 2–3 значения.
-- Кимчи-оверлей: (A) выкл — база; (B) фильтр по уровню премии; (C) фильтр по «премия пошла вниз». A против B/C — это и есть проверка H3.
-
-> Чем больше комбинаций, тем выше шанс выловить шум. Размер сетки ограничивается осознанно, с поправкой на множественность (ниже).
-
-**3. Walk-forward**
-- Скользящие окна (обучение N мес. → тест 1 мес., шаг 1 мес.). Эдж обязан жить в **большинстве** форвард-окон, а не в одном куске периода.
-
-**4. Поправка на множественность**
-- Учитываем число протестированных комбинаций; к маржинальным эджам относимся скептически. **Плато** параметров (эдж устойчив в окрестности) ценнее одиночного **пика**.
-
-**5. Стресс издержек и исполнения** (критично из-за отрицательной асимметрии)
-- Свипы по комиссии и входному слиппеджу.
-- **Проскок стопа**: выход по стопу не по идеальной цене, а с ухудшением δ (несколько уровней) — на продолжающемся пампе неликвида стоп не исполняется по номиналу. Эдж должен пережить разумный δ.
-- Сценарии аномального funding.
-
-**6. Null / sanity-тесты (H4)**
-- Рандомизация направления и/или времени входа — эдж обязан **исчезнуть**.
-- Перестановочный тест соответствия «событие → токен/дата».
-- Survivorship: вселенная событий строится из исторически доступных инструментов; оценить смещение от того, что состав инструментов известен только «на сейчас», и пересчитать без короткоживущих листингов.
-
-**7. Хвост и концентрация**
-- Доля общего результата, приходящаяся на топ-5/10 сделок (держится на горстке → красный флаг).
-- Скью и worst-N сделок; стоимость левого хвоста относительно накопленных мелких выигрышей.
-
-### Критерии «теорема подтверждена» (на OOS, одновременно)
-
-1. H1: средняя грязная форвардная доходность шорта значимо < 0 (бутстрэп-ДИ не пересекает ноль).
-2. H2: чистое матожидание > 0 после комиссий, funding и слиппеджа.
-3. H3: кондиционирование по премии (B или C) стабильно бьёт базу A на OOS и в walk-forward. *(Если нет — H1/H2 могут стоять, но как «обычная реверсия», не «корейский феномен».)*
-4. H4: эдж присутствует в большинстве WF-окон, переживает проскок стопа до заданного δ, **падает** на null-тестах, и не сконцентрирован в outlier-сделках.
-5. Просадка (по честной mark-to-market эквити) — в рамках заранее заданного риск-аппетита.
-
-Любой невыполненный пункт — это результат: фиксируем, что именно убило теорему.
-
----
-
-## Часть III. Что зафиксировать до перехода к ТЗ
-
-- Числовые значения θ_event (хотя бы базовый набор) и горизонтов.
-- Точка сплита IS/OOS; окно и шаг walk-forward.
-- Уровни стресса (δ проскока стопа, диапазоны комиссий/слиппеджа).
-- α значимости, число бутстрэп-итераций, минимальный размер выборки на под-гипотезу.
-- Риск-аппетит по максимальной просадке.
-
-Когда эти значения зафиксированы — теорема перестаёт быть текстом и становится проверяемым протоколом. Только после этого имеет смысл писать ТЗ на реализацию и бэктестить.
+Design stage. Theorem and validation protocol fixed; implementation and backtest to follow.
