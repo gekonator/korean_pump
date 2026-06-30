@@ -8,43 +8,24 @@ A sharp, Korea-driven upward move in an altcoin on Upbit is, on average, **parti
 
 Mechanism: Korea's capital controls impede cross-border arbitrage, so a local retail surge lets the Upbit price overshoot the global price. Local overshoots tend to collapse back. The trade bets on that collapse.
 
-Consequence: the edge is a **high win rate with negative skew** — many small wins (reversion) against rare large losses (pump continues). Positive expectancy is necessary but not sufficient; the thesis must also survive the left tail.
-
 ## Hypotheses
 
-- **H1 — Reversion exists.** Forward return of the token from a post-pump entry to the exit horizon is negative on average (kimchi-agnostic).
+- **H1 — Reversion exists.** Forward return of the token from a post-pump entry to the exit horizon is negative on average.
 - **H2 — Tradeable after costs.** A short capturing that reversion has positive net expectancy after fees, funding, slippage, and stop-through.
 - **H3 — Korea-specific.** The edge strengthens when the Korean (kimchi) premium is elevated and/or starts deflating, and is weaker without it. This separates the thesis from "short any pump."
 - **H4 — Not an artifact.** The edge survives OOS and null/permutation tests, isn't explained by survivorship or look-ahead, and isn't concentrated in a few outlier trades.
 
 The theorem holds only if **H1–H4 hold jointly**. H3 is what makes it specifically a *Korean* phenomenon rather than generic mean reversion.
 
-## Signals
+## Signals & parameters
 
-An **event** (Korean pump) is a token-day flagged by abnormal upward activity on Upbit:
+Every threshold and timing below is a **tuned parameter**, not a fixed assumption — they are exactly what the grid search and IS/OOS evaluate.
 
-- **Volume spike** — the event-hour traded value exceeds the cumulative value of the preceding *N* hours.
-- **Breakout** — the event-hour high exceeds prior *N*-hour highs by a margin.
+**Filters (what flags an event):**
+- **Volume** — the event-hour traded value exceeds the cumulative value of the preceding hours.
+- **Breakout** — the event-hour high exceeds prior hours' highs by a margin.
 - **Pump magnitude** — intra-hour move (open → high) above a base percentage.
-- **Close confirmation** — the candle closes up by a threshold, not just an intrabar wick.
-- **Entry gate** — the move is still above threshold at entry time (the run-up persisted).
+- **Close confirmation** — the candle closes up, not just an intrabar wick.
+- **Kimchi premium** — `KRW / (USD × KRW-USDT) − 1`, sampled before the event, at entry, at exit, and as a timeline (used to test H3).
 
-**Kimchi premium** (measured per trade, used to test H3): `KRW_price / (USD_price × KRW/USDT) − 1`, sampled as a pre-event baseline, at entry, at exit, and as a 5-minute timeline.
-
-Trade: short after the move, protective stop and take-profit (take captures a fraction of the run-up), otherwise time-exit at the next session.
-
-## Validation methodology
-
-- **IS/OOS split** — chronological; the last ~30–40% is held out and untouched until a single final run.
-- **Pre-registered parameter grid** — small and fixed in advance (event thresholds, trade geometry, kimchi overlay on/off). The kimchi overlay vs. the no-overlay baseline *is* the test of H3.
-- **Walk-forward** — rolling train→test windows; the edge must hold in the majority of windows, not one stretch.
-- **Cost & execution stress** — sweeps over fees, slippage, and **stop-through** (worse-than-nominal stop fills on illiquid continued pumps), plus funding scenarios.
-- **Null tests** — randomized entry direction/timing must make the edge vanish; event→date permutation.
-- **Tail & concentration** — bootstrap confidence intervals (returns are skewed, non-normal), worst-N trades, and share of PnL from the top trades.
-- **Honest accounting** — symmetric fees, funding, and mark-to-market drawdown with a concurrent-position cap.
-
-**Pass (on OOS, jointly):** H1 reversion significant (CI excludes zero) · H2 positive net expectancy after costs · H3 kimchi overlay beats baseline · H4 edge in most walk-forward windows, survives stop-through, fails null tests, not outlier-driven · drawdown within risk budget.
-
-## Status
-
-Design stage. Theorem and validation protocol fixed; implementation and backtest to follow.
+**Timing & geometry (grid-searched):** event window time-of-day, entry delay, exit horizon, stop %, take-profit capture (fraction of the run-up), max concurrent positions.
