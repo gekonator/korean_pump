@@ -33,7 +33,7 @@ Every threshold and timing below is a **tuned parameter**, not a fixed assumptio
 **Timing & geometry (grid-searched):** event window time-of-day, entry delay, exit horizon, stop %, take-profit capture (fraction of the run-up), max concurrent positions.
 
 ## Validation protocol
-
+- Data source: pre-extracted CSV only.
 - IS/OOS split, OOS untouched until a single final run.
 - No hardcoded parameters — everything above is grid-searched on IS only.
 - Point-in-time fills (next bar's open), no lookahead.
