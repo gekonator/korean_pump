@@ -1,0 +1,5 @@
+strategy,period,n_trades,total_net,peak_concurrent,peak_exposure_usdt,leverage_vs_10k,ann_return_fixed_pct,mdd_fixed_pct,mdd_fixed_usdt,calmar_fixed,sharpe_fixed,sortino_fixed,old_base_usdt,old_cagr_pct,old_mdd_pct,old_sharpe
+day,IS 2026 (151d),181,4848.72,6,6000.0,0.6,117.2,2.08,288.38,56.48,6.85,16.71,6000.0,318.58,3.03,6.85
+day,OOS 2025 (365d),171,2807.7,7,7000.0,0.7,28.08,3.91,410.05,7.17,4.73,6.87,7000.0,40.11,5.56,4.73
+night,IS 2026 (151d),704,2439.49,15,15000.0,1.5,58.97,6.11,693.56,9.66,3.45,6.04,15000.0,43.94,4.24,3.45
+night,OOS 2025 (365d),992,2170.07,15,15000.0,1.5,21.7,10.17,1164.74,2.13,1.85,2.7,15000.0,14.47,7.08,1.85
