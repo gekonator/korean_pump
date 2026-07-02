@@ -29,25 +29,22 @@ Short a pump on the Binance perp after anomalous volume/growth is detected on Up
 
 ## 2. Validation protocol and results
 
-1. **Engine verification (Stage A).** The engine reproduced the author's
-   reference trades.csv: on 333 shared trades, 100% of rows match within
-   <1 USDT; the residual above 1.3% is fully attributed to data unavailable
-   in our dataset (delistings, Upbit BTC markets).
-2. **Grid search strictly on IS 2026-01→2026-06** (1,600 configurations),
+
+1. **Grid search strictly on IS 2026-01→2026-06** (1,600 configurations),
    selection metric — lower bound of the bootstrap CI of expectancy; the
    winner was chosen by plateau, not peak (ci_low 15.63, neighbors ≥13.7).
    2025 was not used in the selection.
-3. **OOS 2025 (full year), single run, criteria pre-registered before the run:**
+2. **OOS 2025 (full year), single run, criteria pre-registered before the run:**
    CI_low > 0 and expectancy ≥ 50% of IS. **PASS**: expectancy +16.42 vs
    threshold +13.39; CI [+5.2, +27.8]. (The night-strategy candidate failed
    the criterion as expected and was discarded — the protocol filtered out noise.)
-4. **H2 (kimchi specificity): FAIL** — the paired contrast of the kimchi gate
+3. **H2 (kimchi specificity): FAIL** — the paired contrast of the kimchi gate
    on OOS is not significant (+1.51, CI [−2.19, +5.07]); moreover, trades with
    a falling kimchi premium were profitable. Conclusion: the edge is generic
    pump-reversal; no kimchi filter is included in the configuration.
-5. **Shuffle robustness**: the cap almost never binds (7 of 110 days with >3
+4. **Shuffle robustness**: the cap almost never binds (7 of 110 days with >3
    entries); dropping the cap is methodologically confirmed.
-6. **Exploratory decomposition vs Andrey's configuration** (not validation):
+5. **Exploratory decomposition vs Andrey's configuration** (not validation):
    the gap is explained not by thresholds (his soft 14/10/4 alone yields +29%
    annualized with a worse Calmar), but by his kimchi entry trigger, which is
    significantly negative on our data (−46.6 USDT/trade, CI [−89.7, −3.9]).
