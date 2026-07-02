@@ -204,8 +204,67 @@ discarded by a pre-registered filter is the filter doing its job.
   extension, not something the current OOS validated.
 
 **Status: H1 confirmed for the daily configuration; rejected for the night
-configuration.** Proceeding to H2 (kimchi attribution) on the daily
-configuration only.
+configuration.** H2 was then tested on the daily configuration (below).
+
+### H2 — Korea-specificity — **REJECTED**
+
+With the daily H1 configuration frozen, the kimchi premium was tested for
+attribution. The Δkimchi band was calibrated on IS **by the shape** of the
+expectancy–vs–premium relationship (where expectancy crosses zero), not by
+maximizing PnL, and then frozen for a single OOS paired contrast.
+
+**IS shape (2026)** — expectancy by Δkimchi bin, bins fixed before inspecting
+PnL:
+
+| Δkimchi (p.p.) | N | Expectancy | Bootstrap CI |
+|---|---|---|---|
+| < 0 | 27 | +23.7 | [+1.9, +49.5] |
+| [0, 0.5) | 54 | +12.6 | [−6.5, +30.1] |
+| [0.5, 1) | 36 | +29.9 | [+8.7, +50.8] |
+| [1, 1.5) | 21 | +49.2 | [+26.9, +69.4] |
+| [1.5, 2) | 9 | +75.2 | [+46.7, +107.6] |
+| [2, 2.5) | 8 | +37.2 | [−52.6, +125.3] |
+| [2.5, 3) | 7 | −0.8 | [−84.4, +81.4] |
+| ≥ 3 | 18 | +26.5 | [−34.7, +91.0] |
+
+The mechanistic prediction (inverted profile — moderate premium good, extreme
+premium bad) is only *partially* visible: expectancy peaks at [1.5, 2) and win
+rate degrades above 2 p.p. But two facts argue against a Korea-specific story:
+the **Δkimchi < 0 bin is solidly positive** (trades profit even when the premium
+*fell* into entry), and the extreme tail (≥ 3) stays positive. The shape-derived
+band came out as `(−∞, 2.5)` — it only excludes the single failing bin.
+
+**OOS paired contrast (2025), one run:**
+
+| | Blind | Conditioned |
+|---|---|---|
+| N | 171 | 156 (band removed 15) |
+| Expectancy | +16.42 | +17.93 |
+| CI | [+4.8, +27.0] | [+7.0, +29.4] |
+| Win rate / PF | 71.9 % / 1.72 | 74.4 % / 1.81 |
+
+Difference (conditioned − blind): **+1.51 USDT/trade, paired 95 % CI
+[−2.19, +5.07].** Pre-registered criterion required the CI lower bound > 0 — it
+is not. **H0 not rejected.**
+
+**Interpretation.** The kimchi gate produces no statistically distinguishable
+improvement. Combined with the positive Δkimchi < 0 bin on IS, the evidence
+points to the edge being **generic post-pump mean reversion** — reversion driven
+by the Upbit pump event itself (detected via volume/breakout/magnitude on Upbit
+activity), *not* by the cross-exchange price premium. Binance is the execution
+venue for the short; the predictive signal lives entirely on the Upbit side.
+
+Two caveats, so the conclusion is not overstated:
+
+- The shape-derived band was weakly discriminating (removed only 15/171 trades),
+  so the two branches overlap heavily and the contrast had little room to
+  separate. This follows from the honest "by shape" rule, not a protocol defect.
+- *Reference only, not pre-registered, does not change the verdict:* the original
+  author's band [0.2, 1.7) gives diff +10.96, CI [−1.11, +23.37] on N = 71 — a
+  signal on the edge of significance. A moderate-premium zone *may* carry
+  information, but it could not be proven on this data volume. Registered as a
+  hypothesis for a future fresh period (e.g. IS 2026-H2), **not** re-tested on
+  this sample.
 
 ---
 
@@ -218,11 +277,33 @@ configuration only.
 - OOS run: `stage_oos.py`, `oos_trades_day.csv`, `oos_trades_night.csv`
 - Engine verification against reference (1:1 price/exit match on shared trades):
   `legacy_dayshort_diff.py`, `legacy_diff_matched.csv`
+- H2 kimchi contrast: `stage_h2.py`, `results/h2_kimchi_bins_is.csv`,
+  `results/h2_paired_oos.csv`
 
 ---
 
-## Next step — H2
+## Summary of findings
 
-Take the frozen daily H1 configuration, hold every parameter fixed, and run the
-kimchi paired contrast (premium-conditioned vs premium-blind entries on the same
-candidate pool). The kimchi range is fixed on IS and confirmed once on OOS.
+| Hypothesis | Claim | Verdict |
+|---|---|---|
+| **H1** (daily) | Qualifying Upbit pumps revert profitably, net of costs, OOS | **Confirmed** — OOS expectancy +16.42, CI [+5.20, +27.77] |
+| **H1** (night) | Same, for the post-midnight regime | **Rejected** — OOS CI crosses zero |
+| **H2** | The edge is Korea-specific (kimchi premium carries information) | **Rejected** — kimchi gate gives no distinguishable improvement |
+
+The strategy captures a real, cost-surviving, out-of-sample edge in shorting
+post-pump altcoins — but the "Korean premium" framing is **not** what drives it.
+The mechanism is generic post-pump mean reversion, signalled by Upbit pump
+activity, with Binance as the execution venue.
+
+## Next steps
+
+These separate *research validity* (done) from *trading readiness* (not done):
+
+- **Trading-readiness gaps, before any real capital:** slippage stress (current
+  0.05 % is optimistic for illiquid post-pump alts — find where the edge dies),
+  Monte-Carlo on the trade distribution for drawdown / risk-of-ruin, capacity
+  estimation, and forward paper-trading to reconcile assumed vs real fills.
+- **Non-stationarity:** signal density differed sharply between years; forward
+  frequency and return are uncertain.
+- **Open registered hypothesis:** the moderate-kimchi zone (author's prior band),
+  to be tested only on a fresh future period — never re-run on this data.
