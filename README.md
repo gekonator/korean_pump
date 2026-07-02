@@ -268,17 +268,72 @@ Two caveats, so the conclusion is not overstated:
 
 ---
 
+## Post-validation diagnostics
+
+Beyond the hypothesis tests, the frozen daily configuration was profiled on a
+fixed 10,000 USDT base: Monte Carlo (10,000 bootstrap paths of the OOS trades)
+and a slippage stress over a 5×5×7 grid stressing entry, time-exit and stop
+fills separately. The edge survives the entire realistic slippage zone for
+post-pump alts (entry/exit 0.1–0.2 %, stop 0.3–0.75 %); the only failing grid
+point is all three components at their extremes simultaneously. Full numbers,
+equity curves and distribution charts: **[REPORT.md](REPORT.md)**.
+
+---
+
 ## Reproducibility
 
-- Grid search & metrics: `grid_day.csv`, `grid_night.csv`,
-  `top20_day.csv`, `top20_night.csv`
-- Frozen chosen configs & their trades: `chosen_trades_day.csv`,
-  `chosen_trades_night.csv`
-- OOS run: `stage_oos.py`, `oos_trades_day.csv`, `oos_trades_night.csv`
-- Engine verification against reference (1:1 price/exit match on shared trades):
-  `legacy_dayshort_diff.py`, `legacy_diff_matched.csv`
+- Environment: Python ≥ 3.12, `pip install -r requirements.txt`
+  (duckdb, pandas, numpy, matplotlib, requests).
+- Data pipeline (fetch once, freeze): `fetch_universe.py` →
+  `fetch_datasets.py` → `convert_to_parquet.py`. Raw and Parquet data are not
+  distributed (≈15 GB); the scripts rebuild them from public exchange APIs.
+- Grid search & metrics: `stage_b_grid.py` → `results/grid_day.csv`,
+  `results/grid_night.csv`, `results/top20_*.csv`
+- Frozen chosen configs & their trades: `results/chosen_trades_*.csv`
+- OOS run: `stage_oos.py` → `results/oos_trades_*.csv`
+- Engine verification against reference (1:1 price/exit match on shared
+  trades): `stage_a_verify.py`, `legacy_dayshort_diff.py`,
+  `results/legacy_diff_matched.csv`. The reference trade log itself
+  (`data/reference/trades.csv`) is a third party's trading record and is
+  **not distributed** with the repository.
 - H2 kimchi contrast: `stage_h2.py`, `results/h2_kimchi_bins_is.csv`,
   `results/h2_paired_oos.csv`
+- Diagnostics: `metrics_fixed_base.py`, `monte_carlo.py`,
+  `slippage_stress.py`, `make_charts.py`; exploratory decomposition —
+  `exploratory_andrey.py`
+- Bootstrap seeds are fixed throughout; committed CSVs reproduce bit-for-bit.
+- `archive/` holds superseded early-phase scripts kept for provenance.
+
+---
+
+## Limitations
+
+Known weaknesses, stated up front rather than discovered by a reviewer:
+
+- **Reversed IS/OOS chronology.** IS = 2026 (recent), OOS = 2025 (earlier).
+  This is a valid held-out test, but it is not a walk-forward: forward
+  degradation from the calibration regime is untested. Chosen deliberately to
+  calibrate on the regime closest to live deployment; a true forward test
+  begins with 2026-H2 data.
+- **No formal multiple-testing correction.** 1,600 grid configurations are
+  mitigated by CI-lower-bound selection, a plateau requirement and a single
+  pre-registered OOS run — but no White's Reality Check / deflated-Sharpe
+  style correction was applied.
+- **Bootstrap assumes i.i.d. trades.** Up to 7 positions overlap in time and
+  signals cluster by day, so the confidence intervals are somewhat
+  optimistic. A day-cluster bootstrap was used only in the exploratory
+  decomposition.
+- **Realized-only equity.** Floating drawdown of open positions is invisible
+  in MDD; with SL 13 % and up to ~7 concurrent positions the true
+  mark-to-market drawdown can transiently exceed the reported figures
+  (margin call is unreachable at ≤ 0.7x leverage).
+- **Capacity is not modeled.** Flat 1,000 USDT sizing; the slippage stress
+  only roughly approximates larger sizes on illiquid post-pump books.
+- **2025 was reused** after the H1 OOS run for diagnostics (Monte Carlo,
+  slippage stress, exploratory decomposition). Diagnostics do not change the
+  verdicts, but any *configuration* change now requires a fresh OOS period.
+- **`volume_points ≥ 40` sits on the grid edge**; the region beyond was never
+  probed.
 
 ---
 
@@ -294,16 +349,3 @@ The strategy captures a real, cost-surviving, out-of-sample edge in shorting
 post-pump altcoins — but the "Korean premium" framing is **not** what drives it.
 The mechanism is generic post-pump mean reversion, signalled by Upbit pump
 activity, with Binance as the execution venue.
-
-## Next steps
-
-These separate *research validity* (done) from *trading readiness* (not done):
-
-- **Trading-readiness gaps, before any real capital:** slippage stress (current
-  0.05 % is optimistic for illiquid post-pump alts — find where the edge dies),
-  Monte-Carlo on the trade distribution for drawdown / risk-of-ruin, capacity
-  estimation, and forward paper-trading to reconcile assumed vs real fills.
-- **Non-stationarity:** signal density differed sharply between years; forward
-  frequency and return are uncertain.
-- **Open registered hypothesis:** the moderate-kimchi zone (author's prior band),
-  to be tested only on a fresh future period — never re-run on this data.

@@ -1,3 +1,11 @@
+"""SUPERSEDED (Phase 0). Kept for provenance only.
+
+This was the first replication attempt, written before the engine was verified
+against the reference trade log. Several assumptions here were later corrected
+(growth_points multiplier, lookback, funding convention, busy rule). The
+validated engine lives in stage_a_verify.py / stage_b_grid.py / stage_oos.py.
+"""
+
 """Backtest the morning-short and daytime-short strategies on our own frozen data/parquet/.
 
 This is a parameter-replay run (not a fresh H1 tune) meant to sanity-check the
