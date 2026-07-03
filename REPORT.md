@@ -14,7 +14,7 @@ Short a pump on the Binance perp after anomalous volume/growth is detected on Up
 |---|---|
 | Candidate candle | Upbit hourly 00:00–01:00 UTC |
 | volume_points | ≥ 40 (lookback 50 h) |
-| growth_points | ≥ 15 (lookback 50 h, **no** 1.05 multiplier — verified against reference) |
+| growth_points | ≥ 15 (lookback 50 h) |
 | pump_points | ≥ 5 |
 | Entry condition | Upbit price growth from open 00:00 to 04:00 ≥ 3% |
 | Entry | short Binance perp, market at 04:00 UTC open |
