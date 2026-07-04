@@ -1,29 +1,29 @@
 """EXPLORATORY — NOT validation. 2025 was already consumed as H1 OOS; results here are
 directional estimates only and must not be claimed as validated.
 
-Decompose the difference between our frozen day config and Andrey's config on
-2025-01-01 -> 2026-01-01 (full year), fixed base 10,000 USDT, flat 1000/trade,
-realized-only equity, full cost model (fee 0.04%/side, funding (entry,exit] x mark,
-slippage 0.05% on entry/time-exit fills).
+Decompose the difference between the frozen day config and the original baseline
+configuration on 2025-01-01 -> 2026-01-01 (full year), fixed base 10,000 USDT,
+flat 1000/trade, realized-only equity, full cost model (fee 0.04%/side, funding
+(entry,exit] x mark, slippage 0.05% on entry/time-exit fills).
 
-V1  frozen ours:            vp>=40 gp>=15 pp>=5, entry fixed 04:00 UTC (Upbit growth>=3%
-                            vs Upbit open 00:00), SL 13%, TP 90%, exit D+1 14:00, no kimchi, no cap.
-V2  Andrey thresholds only: vp>=14 gp>=10 pp>=4, everything else identical to V1.
-V3  Andrey full:            vp>=14 gp>=10 pp>=4, entry window 04:00-06:00 first minute with
-                            Binance growth>=3% (ref = Binance open 04:00) AND kimchi drop from
-                            window max (tracked from 04:00) >= 1.7 p.p., fill next minute,
-                            cap=4/day (priority gp -> vp -> pp), SL 13%, TP 90%, exit D+1 14:00.
+V1  frozen config:            vp>=40 gp>=15 pp>=5, entry fixed 04:00 UTC (Upbit growth>=3%
+                              vs Upbit open 00:00), SL 13%, TP 90%, exit D+1 14:00, no kimchi, no cap.
+V2  baseline thresholds only: vp>=14 gp>=10 pp>=4, everything else identical to V1.
+V3  baseline full config:     vp>=14 gp>=10 pp>=4, entry window 04:00-06:00 first minute with
+                              Binance growth>=3% (ref = Binance open 04:00) AND kimchi drop from
+                              window max (tracked from 04:00) >= 1.7 p.p., fill next minute,
+                              cap=4/day (priority gp -> vp -> pp), SL 13%, TP 90%, exit D+1 14:00.
 
 (1)vs(2) = pure threshold effect. (2)vs(3) = kimchi-gate+cap effect on soft thresholds
-(an additional independent look at H2 on Andrey's thresholds). Differences use day-cluster
+(an additional independent look at H2 on the baseline thresholds). Differences use day-cluster
 bootstrap (resample calendar days, 1000x) since V3 geometry differs from V2 trade-by-trade.
 """
 
-import math
-
-import duckdb
 import numpy as np
 import pandas as pd
+
+import engine
+from engine import day_points, simulate_short
 
 P = "data/parquet"
 START = pd.Timestamp("2025-01-01")
@@ -37,10 +37,7 @@ HOUR_MS = 3_600_000
 MIN_MS = 60_000
 STALE_MS = 60 * MIN_MS
 
-con = duckdb.connect()
-con.execute("PRAGMA threads=8")
-
-KRW = con.sql(f"SELECT timestamp_utc, close FROM read_parquet('{P}/upbit_krw_usdt_1m.parquet') ORDER BY timestamp_utc").df()
+KRW = engine.sql(f"SELECT timestamp_utc, close FROM read_parquet('{P}/upbit_krw_usdt_1m.parquet') ORDER BY timestamp_utc")
 K_TS = KRW["timestamp_utc"].values.astype("datetime64[ms]").astype(np.int64)
 K_CL = KRW["close"].values
 
@@ -52,67 +49,18 @@ def asof(ts, vals, t):
     return vals[i]
 
 
-def day_points(hmap, hk, lookback=50):
-    row = hmap.get(hk)
-    if row is None:
-        return None
-    o, hi, v = row
-    pp = 0 if o <= 0 or (hi - o) / o * 100 <= 3 else math.ceil((hi - o) / o * 100 - 3)
-    cum = 0.0
-    vp = 0
-    for k in range(1, lookback + 1):
-        r = hmap.get(hk - k)
-        cum += r[2] if r else 0.0
-        if cum <= 0 or v <= cum:
-            break
-        vp = k
-    rm = 0.0
-    gp = 0
-    for k in range(1, lookback + 1):
-        r = hmap.get(hk - k)
-        rm = max(rm, r[1] if r else 0.0)
-        if rm <= 0 or hi <= rm:
-            break
-        gp = k
-    return vp, gp, pp
-
-
-def sim(bts, bo, bh, bl, bc, fi, deadline, entry_px, sl_px, tp_px, f_times, f_rates, entry_ms):
-    i_end = np.searchsorted(bts, deadline)
-    seg_h, seg_l = bh[fi:i_end], bl[fi:i_end]
-    hits = (seg_h >= sl_px) | (seg_l <= tp_px)
-    if hits.any():
-        j = int(np.argmax(hits))
-        exit_ms = int(bts[fi + j]) + MIN_MS - 1
-        exit_px, reason = (sl_px, "SL") if seg_h[j] >= sl_px else (tp_px, "TP")
-    elif i_end < len(bts) and bts[i_end] == deadline:
-        exit_px, reason, exit_ms = bo[i_end] * (1 + SLIP), "TIME", deadline
-    elif i_end > fi:
-        exit_px, reason, exit_ms = bc[i_end - 1] * (1 + SLIP), "TIME", int(bts[i_end - 1]) + MIN_MS - 1
-    else:
-        return None
-    qty = NOTIONAL / entry_px
-    gross = qty * (entry_px - exit_px)
-    fees = NOTIONAL * FEE_SIDE + qty * exit_px * FEE_SIDE
-    ia = np.searchsorted(f_times, entry_ms, side="right")
-    ib = np.searchsorted(f_times, exit_ms, side="right")
-    ft, fr = f_times[ia:ib], f_rates[ia:ib]
-    fund = float((fr * bc[np.clip(np.searchsorted(bts, ft, side='right') - 1, 0, len(bc) - 1)]).sum()) * qty if len(ft) else 0.0
-    return dict(entry_ms=entry_ms, exit_ms=exit_ms, reason=reason, net=gross - fees + fund)
-
-
 def build_pools():
-    universe = con.sql(f"SELECT token FROM read_parquet('{P}/universe.parquet') ORDER BY token").df()["token"].tolist()
-    hourly = con.sql(f"""
+    universe = engine.sql(f"SELECT token FROM read_parquet('{P}/universe.parquet') ORDER BY token")["token"].tolist()
+    hourly = engine.sql(f"""
         SELECT token, date_trunc('hour', timestamp_utc) AS hour,
                first(open ORDER BY timestamp_utc) AS open, max(high) AS high, sum(volume) AS volume
         FROM read_parquet('{P}/upbit_1m/*/*.parquet', hive_partitioning=1)
         WHERE timestamp_utc >= TIMESTAMP '{START}' AND timestamp_utc < TIMESTAMP '{END}'
         GROUP BY token, hour
-    """).df()
+    """)
     hourly["hkey"] = hourly["hour"].values.astype("datetime64[h]").astype(np.int64)
     hourly_by_token = dict(tuple(hourly.groupby("token")))
-    funding_df = con.sql(f"SELECT token, funding_time_utc, funding_rate FROM read_parquet('{P}/binance_funding.parquet') ORDER BY token, funding_time_utc").df()
+    funding_df = engine.sql(f"SELECT token, funding_time_utc, funding_rate FROM read_parquet('{P}/binance_funding.parquet') ORDER BY token, funding_time_utc")
     funding = {t: (g["funding_time_utc"].values.astype("datetime64[ms]").astype(np.int64), g["funding_rate"].values)
                for t, g in funding_df.groupby("token")}
 
@@ -122,7 +70,7 @@ def build_pools():
     data_end_ms = int(END.value // 1_000_000)
 
     fixed_raw = []   # candidates for V1/V2 (fixed 04:00 entry), tagged with points
-    andrey_raw = []  # candidates for V3 (window entry with kimchi drop)
+    baseline_raw = []  # candidates for V3 (baseline window entry with kimchi drop)
 
     for token in universe:
         hdf = hourly_by_token.get(token)
@@ -130,21 +78,21 @@ def build_pools():
             continue
         hmap = {int(k): (o, h, v) for k, o, h, v in zip(hdf["hkey"], hdf["open"], hdf["high"], hdf["volume"])}
         f_times, f_rates = funding.get(token, (np.array([], dtype=np.int64), np.array([])))
-        b = con.sql(f"""
+        b = engine.sql(f"""
             SELECT timestamp_utc, open, high, low, close FROM read_parquet('{P}/binance_1m/token={token}/*.parquet')
             WHERE timestamp_utc >= TIMESTAMP '{START}' AND timestamp_utc < TIMESTAMP '{END}'
             ORDER BY timestamp_utc
-        """).df()
+        """)
         if b.empty:
             continue
         bts = b["timestamp_utc"].values.astype("datetime64[ms]").astype(np.int64)
         bo, bh, bl, bc = b["open"].values, b["high"].values, b["low"].values, b["close"].values
-        u = con.sql(f"""
+        u = engine.sql(f"""
             SELECT timestamp_utc, open, close FROM read_parquet('{P}/upbit_1m/token={token}/*.parquet')
             WHERE timestamp_utc >= TIMESTAMP '{START}' AND timestamp_utc < TIMESTAMP '{END}'
               AND hour(timestamp_utc) IN (3, 4, 5)
             ORDER BY timestamp_utc
-        """).df()
+        """)
         uts = u["timestamp_utc"].values.astype("datetime64[ms]").astype(np.int64)
         uo, ucl = u["open"].values, u["close"].values
 
@@ -178,7 +126,7 @@ def build_pools():
                         raw_open = bo[fi]
                         entry_px = raw_open * (1 - SLIP)
                         ref_imp = raw_open / (p04 / upbit_ref)
-                        tr = sim(bts, bo, bh, bl, bc, fi, deadline, entry_px,
+                        tr = simulate_short(bts, bo, bh, bl, bc, fi, deadline, entry_px,
                                  entry_px * 1.13, entry_px - 0.90 * (entry_px - ref_imp),
                                  f_times, f_rates, int(t04))
                         if tr:
@@ -212,13 +160,13 @@ def build_pools():
                 continue
             entry_ms = int(bts[fj])
             entry_px = bo[fj] * (1 - SLIP)
-            tr = sim(bts, bo, bh, bl, bc, fj, deadline, entry_px,
+            tr = simulate_short(bts, bo, bh, bl, bc, fj, deadline, entry_px,
                      entry_px * 1.13, entry_px - 0.90 * (entry_px - ref_b),
                      f_times, f_rates, entry_ms)
             if tr:
-                andrey_raw.append(dict(token=token, di=di, vp=vp, gp=gp, pp=pp, **tr))
+                baseline_raw.append(dict(token=token, di=di, vp=vp, gp=gp, pp=pp, **tr))
 
-    return days, fixed_raw, andrey_raw
+    return days, fixed_raw, baseline_raw
 
 
 def apply_busy(raw):
@@ -278,23 +226,23 @@ def day_cluster_diff(trades_a, trades_b, seed):
 
 def main():
     print("EXPLORATORY - NOT validation (2025 already consumed as H1 OOS)\n", flush=True)
-    days, fixed_raw, andrey_raw = build_pools()
+    days, fixed_raw, baseline_raw = build_pools()
 
     v1 = apply_busy([r for r in fixed_raw if r["vp"] >= 40 and r["gp"] >= 15 and r["pp"] >= 5])
     v2 = apply_busy(fixed_raw)
     # V3: cap=4/day by priority gp -> vp -> pp, then busy rule
     v3_pool = []
-    for di, g in pd.DataFrame(andrey_raw).groupby("di"):
+    for di, g in pd.DataFrame(baseline_raw).groupby("di"):
         g = g.sort_values(["gp", "vp", "pp"], ascending=False)
         v3_pool.extend(g.head(4).to_dict("records"))
     v3 = apply_busy(v3_pool)
 
-    rows = [metrics(v1, "V1 frozen ours (40/15/5, fixed 04:00)", 11),
-            metrics(v2, "V2 Andrey thresholds no kimchi (14/10/4)", 12),
-            metrics(v3, "V3 Andrey full (14/10/4 + kimchi drop 1.7 + cap4)", 13)]
+    rows = [metrics(v1, "V1 frozen config (40/15/5, fixed 04:00)", 11),
+            metrics(v2, "V2 baseline thresholds no kimchi (14/10/4)", 12),
+            metrics(v3, "V3 baseline full (14/10/4 + kimchi drop 1.7 + cap4)", 13)]
     res = pd.DataFrame(rows)
     res.insert(0, "note", "EXPLORATORY_not_validation_2025_spent_on_H1_OOS")
-    res.to_csv("results/exploratory_andrey.csv", index=False)
+    res.to_csv("results/exploratory_baseline.csv", index=False)
     pd.set_option("display.width", 220)
     print(res.drop(columns=["note"]).to_string(index=False))
 

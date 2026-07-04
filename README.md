@@ -220,7 +220,7 @@ PnL:
 |---|---|---|---|
 | < 0 | 27 | +23.7 | [+1.9, +49.5] |
 | [0, 0.5) | 54 | +12.6 | [−6.5, +30.1] |
-| [0.5, 1) | 36 | +29.9 | [+8.7, +50.8] |
+| [0.5, 1) | 37 | +28.3 | [+8.7, +48.3] |
 | [1, 1.5) | 21 | +49.2 | [+26.9, +69.4] |
 | [1.5, 2) | 9 | +75.2 | [+46.7, +107.6] |
 | [2, 2.5) | 8 | +37.2 | [−52.6, +125.3] |
@@ -284,6 +284,12 @@ equity curves and distribution charts: **[REPORT.md](REPORT.md)**.
 
 - Environment: Python ≥ 3.12, `pip install -r requirements.txt`
   (duckdb, pandas, numpy, matplotlib, requests).
+- **Single source of truth:** the frozen strategy (signal formulas, trade
+  simulator, data loaders) lives in `engine.py`; every research script imports
+  it rather than redefining the logic. A parity reference with every
+  intermediate detector value per signal (`make_parity_reference.py` →
+  `results/detector_parity_reference.csv`) asserts that the engine reproduces
+  the published trade counts and PnL exactly.
 - Data pipeline (fetch once, freeze): `fetch_universe.py` →
   `fetch_datasets.py` → `convert_to_parquet.py`. Raw and Parquet data are not
   distributed (≈15 GB); the scripts rebuild them from public exchange APIs.
@@ -292,15 +298,16 @@ equity curves and distribution charts: **[REPORT.md](REPORT.md)**.
 - Frozen chosen configs & their trades: `results/chosen_trades_*.csv`
 - OOS run: `stage_oos.py` → `results/oos_trades_*.csv`
 - Engine verification against reference (1:1 price/exit match on shared
-  trades): `stage_a_verify.py`, `legacy_dayshort_diff.py`,
-  `results/legacy_diff_matched.csv`. The reference trade log itself
+  trades): `stage_a_verify.py` (an earlier diff harness is kept in
+  `archive/legacy_dayshort_diff.py`), `results/legacy_diff_matched.csv`.
+  The reference trade log itself
   (`data/reference/trades.csv`) is a third party's trading record and is
   **not distributed** with the repository.
 - H2 kimchi contrast: `stage_h2.py`, `results/h2_kimchi_bins_is.csv`,
   `results/h2_paired_oos.csv`
 - Diagnostics: `metrics_fixed_base.py`, `monte_carlo.py`,
   `slippage_stress.py`, `make_charts.py`; exploratory decomposition —
-  `exploratory_andrey.py`
+  `exploratory_baseline.py`
 - Bootstrap seeds are fixed throughout; committed CSVs reproduce bit-for-bit.
 - `archive/` holds superseded early-phase scripts kept for provenance.
 

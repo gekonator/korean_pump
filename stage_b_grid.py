@@ -27,6 +27,8 @@ import duckdb
 import numpy as np
 import pandas as pd
 
+from engine import day_points, simulate_short
+
 P = "data/parquet"
 IS_START = pd.Timestamp("2026-01-01")
 IS_END = pd.Timestamp("2026-06-01")            # exclusive
@@ -54,66 +56,6 @@ DAY_TP = [45, 75, 90, 95]
 
 con = duckdb.connect()
 con.execute("PRAGMA threads=8")
-
-
-def day_points(hmap, hk, lookback=50):
-    row = hmap.get(hk)
-    if row is None:
-        return None
-    o, hi, v = row
-    pp = 0 if o <= 0 or (hi - o) / o * 100 <= 3 else math.ceil((hi - o) / o * 100 - 3)
-    cum = 0.0
-    vp = 0
-    for k in range(1, lookback + 1):
-        r = hmap.get(hk - k)
-        cum += r[2] if r else 0.0
-        if cum <= 0 or v <= cum:
-            break
-        vp = k
-    rm = 0.0
-    gp = 0
-    for k in range(1, lookback + 1):
-        r = hmap.get(hk - k)
-        rm = max(rm, r[1] if r else 0.0)
-        if rm <= 0 or hi <= rm:
-            break
-        gp = k
-    return vp, gp, pp
-
-
-def simulate_short(bts, bo, bh, bl, bc, entry_i, deadline_ms, entry_px, sl_px, tp_px,
-                   f_times, f_rates, entry_ms):
-    """Simulate one short from bar entry_i (inclusive) to deadline. Returns trade dict or None."""
-    i_end = np.searchsorted(bts, deadline_ms)
-    seg_h, seg_l = bh[entry_i:i_end], bl[entry_i:i_end]
-    hits = (seg_h >= sl_px) | (seg_l <= tp_px)
-    if hits.any():
-        j = int(np.argmax(hits))
-        exit_ms = int(bts[entry_i + j]) + MIN_MS - 1
-        if seg_h[j] >= sl_px:
-            exit_px, reason = sl_px, "SL"
-        else:
-            exit_px, reason = tp_px, "TP"
-    elif i_end < len(bts) and bts[i_end] == deadline_ms:
-        exit_px, reason, exit_ms = bo[i_end] * (1 + SLIP), "TIME", deadline_ms
-    elif i_end > entry_i:
-        exit_px, reason, exit_ms = bc[i_end - 1] * (1 + SLIP), "TIME", int(bts[i_end - 1]) + MIN_MS - 1
-    else:
-        return None
-
-    qty = NOTIONAL / entry_px
-    gross = qty * (entry_px - exit_px)
-    fees = NOTIONAL * FEE_SIDE + qty * exit_px * FEE_SIDE
-    ia = np.searchsorted(f_times, entry_ms, side="right")
-    ib = np.searchsorted(f_times, exit_ms, side="right")
-    ft, fr = f_times[ia:ib], f_rates[ia:ib]
-    if len(ft):
-        mi = np.clip(np.searchsorted(bts, ft, side="right") - 1, 0, len(bc) - 1)
-        funding = float((fr * bc[mi]).sum()) * qty
-    else:
-        funding = 0.0
-    net = gross - fees + funding
-    return dict(exit_ms=exit_ms, reason=reason, net=net)
 
 
 # ------------------------------------------------------------------ precompute per token ----

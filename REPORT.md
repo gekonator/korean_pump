@@ -47,10 +47,11 @@ Short a pump on the Binance perp after anomalous volume/growth is detected on Up
    pump-reversal; no kimchi filter is included in the configuration.
 5. **Shuffle robustness**: the cap almost never binds (7 of 110 days with >3
    entries); dropping the cap is methodologically confirmed.
-6. **Exploratory decomposition vs Andrey's configuration** (not validation):
-   the gap is explained not by thresholds (his soft 14/10/4 alone yields +29%
-   annualized with a worse Calmar), but by his kimchi entry trigger, which is
-   significantly negative on our data (−46.6 USDT/trade, CI [−89.7, −3.9]).
+6. **Exploratory decomposition vs the original baseline configuration** (not
+   validation): the gap is explained not by thresholds (the baseline's soft
+   14/10/4 alone yields +29% annualized with a worse Calmar), but by its kimchi
+   entry trigger, which is significantly negative on our data
+   (−46.6 USDT/trade, CI [−89.7, −3.9]).
 
 ## 3. Metrics (base 10,000 USDT, realized-only equity)
 
@@ -138,8 +139,8 @@ slippage in live trading is mandatory.
 | Artifact | Path |
 |---|---|
 | Data | `data/parquet/` (+ `data/reference/trades.csv` — author's reference) |
-| Engine/stages | `stage_a_verify.py`, `stage_b_grid.py`, `stage_c_shuffle.py`, `stage_oos.py`, `stage_h2.py` |
-| Metrics/stress | `metrics_fixed_base.py`, `monte_carlo.py`, `slippage_stress.py`, `exploratory_andrey.py` |
+| Engine/stages | `engine.py` (single source of truth), `stage_a_verify.py`, `stage_b_grid.py`, `stage_c_shuffle.py`, `stage_oos.py`, `stage_h2.py`, `make_parity_reference.py` |
+| Metrics/stress | `metrics_fixed_base.py`, `monte_carlo.py`, `slippage_stress.py`, `exploratory_baseline.py` |
 | Trades | `results/chosen_trades_day.csv` (IS), `results/oos_trades_day.csv` (OOS) |
 | Grids/validation | `results/grid_day.csv`, `results/top20_day.csv`, `results/h2_*.csv` |
 | Stress/MC | `results/slippage_stress.csv`, `results/monte_carlo.csv`, `results/metrics_fixed_base.csv` |

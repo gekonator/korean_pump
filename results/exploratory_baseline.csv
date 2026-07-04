@@ -1,0 +1,4 @@
+note,variant,n_trades,total_net,expectancy,ci_low,ci_high,win_rate,profit_factor,ann_return_pct,mdd_pct,calmar,peak_concurrent
+EXPLORATORY_not_validation_2025_spent_on_H1_OOS,"V1 frozen config (40/15/5, fixed 04:00)",171,2807.7,16.42,5.41,27.1,71.9,1.72,28.08,3.91,7.17,7
+EXPLORATORY_not_validation_2025_spent_on_H1_OOS,V2 baseline thresholds no kimchi (14/10/4),317,2893.4,9.13,1.44,17.06,67.8,1.36,28.93,7.87,3.68,10
+EXPLORATORY_not_validation_2025_spent_on_H1_OOS,V3 baseline full (14/10/4 + kimchi drop 1.7 + cap4),21,-786.19,-37.44,-77.06,1.17,52.4,0.34,-7.86,7.86,-1.0,2

@@ -8,12 +8,13 @@ SL 13%, TP 90%-capture, flat fee 0.0008, no slippage (matching the reference cos
 Period 2025-06-01 -> 2026-06-01. All times UTC.
 """
 
-import math
 import time
 
 import duckdb
 import numpy as np
 import pandas as pd
+
+from engine import day_points
 
 P = "data/parquet"
 PERIOD_START = pd.Timestamp("2025-06-01")
@@ -22,7 +23,6 @@ HOURLY_START = pd.Timestamp("2025-05-25")
 DATA_END = pd.Timestamp("2026-06-01")
 
 FEE = 0.0008
-LOOKBACK = 50
 VP_MIN, GP_MIN, PP_MIN = 30, 20, 3
 GROWTH_MIN = 0.03
 SL_MULT = 1.13
@@ -32,31 +32,6 @@ MIN_MS = 60_000
 
 con = duckdb.connect()
 con.execute("PRAGMA threads=8")
-
-
-def compute_points(hmap, hk):
-    row = hmap.get(hk)
-    if row is None:
-        return None
-    o, hi, v = row
-    pp = 0 if o <= 0 or (hi - o) / o * 100 <= 3 else math.ceil((hi - o) / o * 100 - 3)
-    cum = 0.0
-    vp = 0
-    for k in range(1, LOOKBACK + 1):
-        r = hmap.get(hk - k)
-        cum += r[2] if r else 0.0
-        if cum <= 0 or v <= cum:
-            break
-        vp = k
-    rm = 0.0
-    gp = 0
-    for k in range(1, LOOKBACK + 1):
-        r = hmap.get(hk - k)
-        rm = max(rm, r[1] if r else 0.0)
-        if rm <= 0 or hi <= rm:  # fix 1: no multiplier
-            break
-        gp = k
-    return vp, gp, pp
 
 
 def main():
@@ -103,7 +78,7 @@ def main():
 
         open_until = -1
         for di in range(len(days)):
-            pts = compute_points(hmap, int(day_hkeys[di]))
+            pts = day_points(hmap, int(day_hkeys[di]))
             if pts is None:
                 continue
             vp, gp, pp = pts

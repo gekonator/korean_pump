@@ -14,12 +14,13 @@ Full grid: s_entry x s_exit in {0.05,0.10,0.15,0.20,0.30}%, s_stop in
 {0.05,0.10,0.20,0.30,0.50,0.75,1.0}% -> 175 combos, IS 2026 and OOS 2025 separately.
 """
 
-import math
 import time
 
-import duckdb
 import numpy as np
 import pandas as pd
+
+import engine
+from engine import day_points
 
 P = "data/parquet"
 FIXED_BASE = 10_000.0
@@ -34,50 +35,22 @@ S_STOP = [0.05, 0.10, 0.20, 0.30, 0.50, 0.75, 1.00]
 
 PERIODS = {"IS_2026": ("2026-01-01", "2026-06-01", 151), "OOS_2025": ("2025-01-01", "2026-01-01", 365)}
 
-con = duckdb.connect()
-con.execute("PRAGMA threads=8")
-
-
-def day_points(hmap, hk, lookback=50):
-    row = hmap.get(hk)
-    if row is None:
-        return None
-    o, hi, v = row
-    pp = 0 if o <= 0 or (hi - o) / o * 100 <= 3 else math.ceil((hi - o) / o * 100 - 3)
-    cum = 0.0
-    vp = 0
-    for k in range(1, lookback + 1):
-        r = hmap.get(hk - k)
-        cum += r[2] if r else 0.0
-        if cum <= 0 or v <= cum:
-            break
-        vp = k
-    rm = 0.0
-    gp = 0
-    for k in range(1, lookback + 1):
-        r = hmap.get(hk - k)
-        rm = max(rm, r[1] if r else 0.0)
-        if rm <= 0 or hi <= rm:
-            break
-        gp = k
-    return vp, gp, pp
-
 
 def collect_candidates(start, end):
     """Frozen-config candidates with cached price windows; execution left parametric."""
     start, end = pd.Timestamp(start), pd.Timestamp(end)
     data_end_ms = int(end.value // 1_000_000)
-    universe = con.sql(f"SELECT token FROM read_parquet('{P}/universe.parquet') ORDER BY token").df()["token"].tolist()
-    hourly = con.sql(f"""
+    universe = engine.sql(f"SELECT token FROM read_parquet('{P}/universe.parquet') ORDER BY token")["token"].tolist()
+    hourly = engine.sql(f"""
         SELECT token, date_trunc('hour', timestamp_utc) AS hour,
                first(open ORDER BY timestamp_utc) AS open, max(high) AS high, sum(volume) AS volume
         FROM read_parquet('{P}/upbit_1m/*/*.parquet', hive_partitioning=1)
         WHERE timestamp_utc >= TIMESTAMP '{start}' AND timestamp_utc < TIMESTAMP '{end}'
         GROUP BY token, hour
-    """).df()
+    """)
     hourly["hkey"] = hourly["hour"].values.astype("datetime64[h]").astype(np.int64)
     hourly_by_token = dict(tuple(hourly.groupby("token")))
-    funding_df = con.sql(f"SELECT token, funding_time_utc, funding_rate FROM read_parquet('{P}/binance_funding.parquet') ORDER BY token, funding_time_utc").df()
+    funding_df = engine.sql(f"SELECT token, funding_time_utc, funding_rate FROM read_parquet('{P}/binance_funding.parquet') ORDER BY token, funding_time_utc")
     funding = {t: (g["funding_time_utc"].values.astype("datetime64[ms]").astype(np.int64), g["funding_rate"].values)
                for t, g in funding_df.groupby("token")}
 
@@ -92,21 +65,21 @@ def collect_candidates(start, end):
             continue
         hmap = {int(k): (o, h, v) for k, o, h, v in zip(hdf["hkey"], hdf["open"], hdf["high"], hdf["volume"])}
         f_times, f_rates = funding.get(token, (np.array([], dtype=np.int64), np.array([])))
-        b = con.sql(f"""
+        b = engine.sql(f"""
             SELECT timestamp_utc, open, high, low, close FROM read_parquet('{P}/binance_1m/token={token}/*.parquet')
             WHERE timestamp_utc >= TIMESTAMP '{start}' AND timestamp_utc < TIMESTAMP '{end}'
             ORDER BY timestamp_utc
-        """).df()
+        """)
         if b.empty:
             continue
         bts = b["timestamp_utc"].values.astype("datetime64[ms]").astype(np.int64)
         bo, bh, bl, bc = b["open"].values, b["high"].values, b["low"].values, b["close"].values
-        u = con.sql(f"""
+        u = engine.sql(f"""
             SELECT timestamp_utc, open, close FROM read_parquet('{P}/upbit_1m/token={token}/*.parquet')
             WHERE timestamp_utc >= TIMESTAMP '{start}' AND timestamp_utc < TIMESTAMP '{end}'
               AND (hour(timestamp_utc) = 3 OR (hour(timestamp_utc) = 4 AND minute(timestamp_utc) = 0))
             ORDER BY timestamp_utc
-        """).df()
+        """)
         uts = u["timestamp_utc"].values.astype("datetime64[ms]").astype(np.int64)
         uo, ucl = u["open"].values, u["close"].values
 
